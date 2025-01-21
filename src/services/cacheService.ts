@@ -1,6 +1,14 @@
-import { Influencer, CacheStore } from "@/app/types/types";
+import { Claim, Influencer, CacheStore } from "@/app/types/types";
 
-const CACHE_KEY = 'health_influencer_cache';
+const CACHE_KEY = 'health_claims_cache';
+
+interface CachedClaim extends Omit<Claim, 'id'> {
+  id: string;  // El caché almacena IDs como strings
+}
+
+interface CacheData extends Omit<CacheStore, 'claims'> {
+  claims?: Record<string, CachedClaim>;
+}
 
 const INITIAL_DATA: CacheStore = {
   influencers: {
@@ -13,12 +21,26 @@ const INITIAL_DATA: CacheStore = {
       profileImage: "",
       claims: [
         {
-          id: "1",
+          id: 1,
           text: "Regular exercise improves mental health",
           category: "Mental Health",
           status: "Verified",
           confidence: 95,
-          date: "2024-03-15"
+          date: "2024-03-15",
+          analysis: {
+            methodology: "Clinical studies review",
+            evidence: ["Multiple peer-reviewed studies"],
+            limitations: ["Varied exercise types"],
+            conclusion: "Strong evidence supports claim"
+          },
+          influencer: {
+            id: 1,
+            name: "Dr. Mike Varshavski",
+            handle: "doctormike",
+            platform: "YouTube",
+            trustScore: 92
+          },
+          sources: ["PubMed Central"]
         }
       ]
     },
@@ -30,12 +52,26 @@ const INITIAL_DATA: CacheStore = {
       trustScore: 85,
       claims: [
         {
-          id: "2",
+          id: 2,
           text: "Intermittent fasting can help with insulin resistance",
           category: "Nutrition",
           status: "Verified",
           confidence: 90,
-          date: "2024-03-10"
+          date: "2024-03-10",
+          analysis: {
+            methodology: "Research review",
+            evidence: ["Clinical trials", "Meta-analyses"],
+            limitations: ["Various fasting protocols"],
+            conclusion: "Evidence supports effectiveness"
+          },
+          influencer: {
+            id: 2,
+            name: "Dr. Eric Berg",
+            handle: "drberg",
+            platform: "YouTube",
+            trustScore: 85
+          },
+          sources: ["Medical journals"]
         }
       ]
     }
@@ -60,6 +96,20 @@ const INITIAL_DATA: CacheStore = {
   },
   mostViewed: ["Dr. Mike Varshavski", "Dr. Eric Berg"]
 };
+
+function getCache(): CacheData {
+  if (typeof window === 'undefined') return { influencers: {}, favorites: [], lastUpdated: {}, stats: {}, mostViewed: [] };
+  
+  const cached = localStorage.getItem(CACHE_KEY);
+  if (!cached) return { influencers: {}, favorites: [], lastUpdated: {}, stats: {}, mostViewed: [] };
+  
+  return JSON.parse(cached);
+}
+
+function setCache(data: CacheData) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+}
 
 export const cacheService = {
   getStore(): CacheStore {
@@ -151,5 +201,34 @@ export const cacheService = {
     
     this.saveStore(store);
     return store.favorites.includes(name);
+  },
+
+  getClaim(id: number): Claim | null {
+    const cache = getCache();
+    const cachedClaim = cache.claims?.[id.toString()];
+    
+    if (!cachedClaim) return null;
+    
+    // Convertir el ID string a número al devolver el claim
+    return {
+      ...cachedClaim,
+      id: parseInt(cachedClaim.id, 10)
+    };
+  },
+
+  setClaim(claim: Claim) {
+    const cache = getCache();
+    const claims = cache.claims || {};
+    
+    // Convertir el ID a string para almacenamiento
+    claims[claim.id.toString()] = {
+      ...claim,
+      id: claim.id.toString()
+    };
+    
+    setCache({
+      ...cache,
+      claims
+    });
   }
 }; 

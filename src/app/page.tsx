@@ -1,170 +1,144 @@
 'use client';
 
-import { useState } from 'react';
-import { Influencer } from '@/app/types/types';
-import { analyzeInfluencer, getDetailedAnalysis } from '@/services/googleAI';
+import { useEffect, useState } from 'react';
+import DashboardLayout from '@/components/DashboardLayout';
+import { rankingService } from '@/services/rankingService';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import Link from 'next/link';
 
-interface DetailedAnalysis {
-  analysis: string;
-  evidenceLevel: string;
-  sources: string[];
-  recommendations: string[];
+interface DashboardStats {
+  totalInfluencers: number;
+  totalViews: number;
+  avgTrustScore: number;
+  totalClaims: number;
 }
 
 export default function Home() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [influencer, setInfluencer] = useState<Influencer | null>(null);
-  const [selectedClaim, setSelectedClaim] = useState<string | null>(null);
-  const [detailedAnalysis, setDetailedAnalysis] = useState<DetailedAnalysis | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalInfluencers: 0,
+    totalViews: 0,
+    avgTrustScore: 0,
+    totalClaims: 0
+  });
+  const [loading, setLoading] = useState(true);
 
-  const handleSearch = async () => {
-    setLoading(true);
-    setError(null); // Clear previous errors
-    try {
-      const data = await analyzeInfluencer(searchTerm);
-      if (data) {
-        setInfluencer(data);
-        setError(null);
-      } else {
-        setError("Couldn't analyze this influencer. Try another name or check the spelling.");
-        setInfluencer(null);
-      }
-    } catch (error) {
-      console.error('Error analyzing influencer:', error);
-      setError("Something went wrong. Please try again with a different influencer.");
-      setInfluencer(null);
+  useEffect(() => {
+    async function loadStats() {
+      const data = await rankingService.getGlobalStats();
+      setStats(data);
+      setLoading(false);
     }
-    setLoading(false);
-  };
+    loadStats();
+  }, []);
 
-  const handleClaimClick = async (claim: string) => {
-    setSelectedClaim(claim);
-    try {
-      const analysis = await getDetailedAnalysis(claim);
-      if (analysis) {
-        setDetailedAnalysis(analysis);
-      } else {
-        setError("Couldn't analyze this claim. Try another one.");
-      }
-    } catch (error) {
-      console.error('Error analyzing claim:', error);
-      setError("Failed to analyze the claim. Please try again.");
-    }
-  };
+  if (loading) return <LoadingSpinner />;
 
   return (
-    <main className="min-h-screen p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Health Influencer Analyzer</h1>
-        
-        <div className="flex gap-4 mb-8">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Enter influencer name (e.g., Dr. Mike)"
-            className="flex-1 p-2 border rounded"
-          />
-          <button
-            onClick={handleSearch}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
-          >
-            {loading ? 'Analyzing...' : 'Analyze'}
-          </button>
+    <DashboardLayout>
+      <div className="space-y-8">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Monitor health influencer metrics and claims analysis
+          </p>
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-md text-red-600">
-            <p>{error}</p>
-            <p className="text-sm mt-2">
-              Try these popular influencers:
-              <span className="font-medium"> Dr Mike Varshavski, Dr Mark Hyman, Dr Andrew Huberman</span>
-            </p>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-all hover:shadow-md">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Influencers</h3>
+            <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{stats.totalInfluencers}</p>
           </div>
-        )}
 
-        {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center p-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-            <span className="ml-3">Analyzing influencer...</span>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-all hover:shadow-md">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Views</h3>
+            <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{stats.totalViews.toLocaleString()}</p>
           </div>
-        )}
 
-        {influencer && !loading && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold">{influencer.name}</h2>
-                <p className="text-gray-600">@{influencer.handle}</p>
-                <p className="text-sm">{influencer.followers.toLocaleString()} followers</p>
-              </div>
-              <div className="ml-auto">
-                <div className="text-center">
-                  <div className="text-3xl font-bold">{influencer.trustScore}</div>
-                  <div className="text-sm text-gray-600">Trust Score</div>
-                </div>
-              </div>
-            </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-all hover:shadow-md">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Average Trust Score</h3>
+            <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{stats.avgTrustScore}%</p>
+          </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold">Recent Claims</h3>
-              {influencer.claims.map((claim) => (
-                <div 
-                  key={claim.id} 
-                  className="border rounded p-4 cursor-pointer hover:bg-gray-50"
-                  onClick={() => handleClaimClick(claim.text)}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <p className="flex-1">{claim.text}</p>
-                    <span className={`px-2 py-1 rounded text-sm ${
-                      claim.status === 'Verified' ? 'bg-green-100 text-green-800' :
-                      claim.status === 'Questionable' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {claim.status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>{claim.category}</span>
-                    <span>Confidence: {claim.confidence}%</span>
-                  </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-all hover:shadow-md">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Claims Analyzed</h3>
+            <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{stats.totalClaims}</p>
+          </div>
+        </div>
 
-                  {selectedClaim === claim.text && detailedAnalysis && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded">
-                      <h4 className="font-semibold mb-2">Detailed Analysis</h4>
-                      <p className="mb-2">{detailedAnalysis.analysis}</p>
-                      <div className="text-sm">
-                        <p className="font-semibold">Evidence Level: 
-                          <span className={`ml-2 px-2 py-1 rounded ${
-                            detailedAnalysis.evidenceLevel === 'Strong' ? 'bg-green-100' :
-                            detailedAnalysis.evidenceLevel === 'Moderate' ? 'bg-yellow-100' :
-                            'bg-red-100'
-                          }`}>
-                            {detailedAnalysis.evidenceLevel}
-                          </span>
-                        </p>
-                        <div className="mt-2">
-                          <p className="font-semibold">Key Recommendations:</p>
-                          <ul className="list-disc list-inside">
-                            {detailedAnalysis.recommendations.map((rec, i) => (
-                              <li key={i}>{rec}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+        {/* Quick Actions & Status */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Quick Actions */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
+            <div className="space-y-3">
+              <Link 
+                href="/leaderboard" 
+                className="block px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 
+                         rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+              >
+                View Rankings
+              </Link>
+              <Link 
+                href="/categories" 
+                className="block px-4 py-2 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 
+                         rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+              >
+                Browse Categories
+              </Link>
             </div>
           </div>
-        )}
+
+          {/* Recent Updates */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Updates</h2>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              <p>Latest Analysis</p>
+              <p className="mt-1 text-gray-900 dark:text-gray-300">Updated {new Date().toLocaleDateString()}</p>
+            </div>
+          </div>
+
+          {/* System Status */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Database Status</h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Active</span>
+                <span className="px-2 py-1 text-xs font-medium bg-green-100 dark:bg-green-900/50 
+                               text-green-800 dark:text-green-200 rounded-full">
+                  All systems operational
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
+                <span className="px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900/50 
+                               text-blue-800 dark:text-blue-200 rounded-full">
+                  Online
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Activity</h2>
+          <div className="space-y-4">
+            {[1, 2, 3].map((_, i) => (
+              <div key={i} className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">New claim analyzed</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{new Date().toLocaleDateString()}</p>
+                </div>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {Math.floor(Math.random() * 24)} hours ago
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </main>
+    </DashboardLayout>
   );
 } 

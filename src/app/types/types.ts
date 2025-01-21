@@ -12,13 +12,26 @@ export interface Influencer {
 }
 
 export interface Claim {
-  id: string;
+  id: number;
   text: string;
-  category: 'Nutrition' | 'Medicine' | 'Mental Health' | 'Fitness';
-  status: 'Verified' | 'Questionable' | 'Debunked';
-  confidence: number;
-  source?: string;
+  status: string;
+  category: string;
   date: string;
+  confidence: number;
+  analysis: {
+    methodology: string;
+    evidence: string[];
+    limitations: string[];
+    conclusion: string;
+  };
+  influencer: {
+    id: number;
+    name: string;
+    handle: string;
+    platform: string;
+    trustScore: number;
+  };
+  sources: string[];
 }
 
 export interface DetailedAnalysis {
