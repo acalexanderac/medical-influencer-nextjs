@@ -15,50 +15,63 @@ import {
   ChartBarIcon
 } from '@heroicons/react/24/outline';
 import { Claim } from '@/app/types/types';
+import { useRouter } from 'next/router';
 
 export default function ClaimDetailPage() {
   const params = useParams();
   const [claim, setClaim] = useState<Claim | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadClaimDetail() {
+      if (!params?.id) {
+        setError('Invalid claim ID');
+        setLoading(false);
+        return;
+      }
+
       try {
         const claimId = parseInt(params.id as string, 10);
         if (isNaN(claimId)) {
-          console.error('Invalid claim ID');
-          setLoading(false);
+          setError('Invalid claim ID format');
           return;
         }
 
-        const data = await rankingService.getClaimById(claimId);
-        setClaim(data);
-      } catch (error) {
-        console.error('Error loading claim:', error);
+        const claimData = await rankingService.getClaimById(claimId);
+        if (!claimData) {
+          setError('Claim not found');
+          return;
+        }
+
+        setClaim(claimData);
+      } catch (err) {
+        console.error('Error loading claim:', err);
+        setError('Failed to load claim details');
       } finally {
         setLoading(false);
       }
     }
 
     loadClaimDetail();
-  }, [params.id]);
+  }, [params?.id]);
 
   if (loading) return <LoadingSpinner />;
-  if (!claim) return (
-    <DashboardLayout>
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Claim Not Found</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-6">The claim you're looking for doesn't exist or has been removed.</p>
-        <Link
-          href="/claims"
-          className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-        >
-          <ArrowLeftIcon className="w-4 h-4 mr-1" />
-          Back to Claims
-        </Link>
-      </div>
-    </DashboardLayout>
-  );
+
+  if (error || !claim) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-4xl mx-auto p-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700">{error || 'Failed to load claim'}</p>
+            <Link href="/search" className="mt-4 text-blue-600 hover:text-blue-800">
+              ← Back to search
+            </Link>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -132,7 +145,19 @@ export default function ClaimDetailPage() {
             </div>
             <ul className="space-y-2">
               {claim.analysis.evidence.map((item, index) => (
-                <li key={index} className="text-gray-700 dark:text-gray-300">• {item}</li>
+                <li key={index} className="text-gray-700 dark:text-gray-300">
+                  • {item.source} - {item.description}
+                  {item.link && (
+                    <a 
+                      href={item.link} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                    >
+                      View Source
+                    </a>
+                  )}
+                </li>
               ))}
             </ul>
           </div>
@@ -150,19 +175,26 @@ export default function ClaimDetailPage() {
             </ul>
           </div>
 
-          {/* Sources */}
+          {/* References */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
             <div className="flex items-center space-x-2 mb-4">
               <LinkIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Sources</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">References</h2>
             </div>
             <ul className="space-y-2">
-              {claim.sources.map((source, index) => (
+              {claim.analysis.references.map((ref, index) => (
                 <li key={index} className="text-gray-700 dark:text-gray-300">
-                  <a href={source} target="_blank" rel="noopener noreferrer" 
-                     className="hover:text-blue-600 dark:hover:text-blue-400">
-                    {source}
-                  </a>
+                  • {ref.title} - {ref.authors} ({ref.year}) - {ref.publication}
+                  {ref.link && (
+                    <a 
+                      href={ref.link} 
+                      className="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      View Source
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>
@@ -177,6 +209,19 @@ export default function ClaimDetailPage() {
             <span className="text-sm text-gray-500 dark:text-gray-400">Confidence Score</span>
             <span className="text-lg font-medium text-gray-900 dark:text-white">{claim.confidence}%</span>
           </div>
+        </div>
+
+        {/* Expert Opinions */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <UserIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Expert Opinions</h2>
+          </div>
+          <ul className="space-y-2">
+            {claim.analysis.expertOpinions.map((opinion, index) => (
+              <li key={index} className="text-gray-700 dark:text-gray-300">• {opinion.expert} - {opinion.opinion}</li>
+            ))}
+          </ul>
         </div>
       </div>
     </DashboardLayout>

@@ -1,5 +1,6 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
+import { ThemeProvider } from '@/providers/ThemeProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -15,22 +16,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.className}>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if (localStorage.getItem('darkMode') === 'true' || 
-                  (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark')
-              }
-            `,
-          }}
-        />
-      </head>
       <body className="min-h-screen bg-gray-50 antialiased">
-        <main className="min-h-screen">
-          {children}
-        </main>
+        <ThemeProvider>
+          <main className="min-h-screen">
+            {children}
+          </main>
+        </ThemeProvider>
       </body>
     </html>
   )

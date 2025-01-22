@@ -11,19 +11,43 @@ export interface Influencer {
   stats?: InfluencerStats;
 }
 
+interface Evidence {
+  source: string;
+  link: string;
+  description: string;
+}
+
+interface ExpertOpinion {
+  expert: string;
+  opinion: string;
+}
+
+interface Reference {
+  title: string;
+  authors: string;
+  publication: string;
+  year: string;
+  link: string;
+}
+
+interface Analysis {
+  summary: string;
+  methodology: string;
+  evidence: Evidence[];
+  limitations: string[];
+  conclusion: string;
+  expertOpinions: ExpertOpinion[];
+  references: Reference[];
+}
+
 export interface Claim {
   id: number;
   text: string;
-  status: string;
   category: string;
-  date: string;
+  status: string;
   confidence: number;
-  analysis: {
-    methodology: string;
-    evidence: string[];
-    limitations: string[];
-    conclusion: string;
-  };
+  date: string;
+  analysis: Analysis;
   influencer: {
     id: number;
     name: string;
@@ -31,7 +55,6 @@ export interface Claim {
     platform: string;
     trustScore: number;
   };
-  sources: string[];
 }
 
 export interface DetailedAnalysis {

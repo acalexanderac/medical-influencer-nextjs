@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Influencer, Claim } from '@/app/types/types';
+import { Influencer, Claim, DetailedAnalysis } from '@/app/types/types';
 import { statsService } from '@/services/statsService';
 
 if (!process.env.NEXT_PUBLIC_GOOGLE_AI_API_KEY) {
@@ -33,38 +33,72 @@ function cleanJsonResponse(text: string): string {
 export async function analyzeInfluencer(influencerName: string): Promise<Influencer | null> {
   const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
-  // Simplified prompt with minimal instructions
-  const prompt = `Return a JSON object for ${influencerName}:
+  const prompt = `Analyze ${influencerName} and provide their most significant health/science claims. Return as JSON:
 {
   "name": "${influencerName}",
-  "handle": "social_media_handle",
-  "platform": "YouTube",
-  "followers": 1000000,
-  "trustScore": 85,
+  "handle": "their actual social media handle",
+  "platform": "their main platform (YouTube, Instagram, etc)",
+  "followers": actual_follower_count,
+  "trustScore": score_based_on_credentials_and_accuracy,
   "profileImage": "",
   "claims": [
     {
-      "id": "1",
-      "text": "A health claim",
-      "category": "Nutrition",
-      "status": "Verified",
-      "confidence": 90,
-      "date": "2024-03-15"
+      "text": "Specific claim they made (e.g. 'Morning sunlight exposure improves sleep quality')",
+      "category": "Sleep/Nutrition/Fitness/Mental Health/Neuroscience",
+      "status": "Verified/Questionable/Debunked",
+      "confidence": rating_from_0_to_100,
+      "date": "2024-03-15",
+      "analysis": {
+        "summary": "Brief 1-2 sentence summary of the analysis",
+        "methodology": "How this claim was verified",
+        "evidence": [
+          {
+            "source": "Title of scientific paper or study",
+            "link": "URL to the source if available",
+            "description": "Brief description of the evidence"
+          }
+        ],
+        "limitations": ["List of important caveats or limitations"],
+        "conclusion": "Detailed scientific conclusion",
+        "expertOpinions": [
+          {
+            "expert": "Expert name and credentials",
+            "opinion": "What they say about this claim"
+          }
+        ],
+        "references": [
+          {
+            "title": "Reference title",
+            "authors": "Authors",
+            "publication": "Journal/Publication",
+            "year": "Publication year",
+            "link": "DOI or URL"
+          }
+        ]
+      }
     }
   ]
-}`;
+}
 
-  let responseText = '';
+For ${influencerName}, provide detailed scientific analysis for each claim, including:
+1. Direct quotes or paraphrased statements from their content
+2. Scientific evidence supporting or refuting each claim
+3. Expert opinions and consensus
+4. Links to peer-reviewed research where available
+5. Clear explanations of the science behind each claim`;
 
   try {
     const result = await model.generateContent(prompt);
     if (!result?.response) {
+      console.error('No response from AI model');
       return createDefaultInfluencer(influencerName);
     }
 
-    responseText = result.response.text();
+    const responseText = result.response.text();
+    console.log('Raw AI response:', responseText); // Add logging
     
     if (!responseText?.trim()) {
+      console.error('Empty response from AI model');
       return createDefaultInfluencer(influencerName);
     }
 
@@ -93,7 +127,16 @@ export async function analyzeInfluencer(influencerName: string): Promise<Influen
     
     try {
       const parsedData = JSON.parse(cleanedJson);
+      console.log('Parsed data before validation:', parsedData); // Add logging
+      
+      // Check if claims exist and have required properties
+      if (!parsedData.claims || !Array.isArray(parsedData.claims) || parsedData.claims.length === 0) {
+        console.error('No claims found in response, using default');
+        return createDefaultInfluencer(influencerName);
+      }
+
       const finalData = validateAndFixData(parsedData, influencerName);
+      console.log('Final validated data:', finalData); // Add logging
       
       if (finalData) {
         statsService.updateStats(finalData);
@@ -120,10 +163,23 @@ function createDefaultInfluencer(name: string): Influencer {
       confidence: 90,
       date: new Date().toISOString(),
       analysis: {
-        methodology: "AI-based analysis",
-        evidence: ["Automated content analysis"],
-        limitations: ["Limited to public information"],
-        conclusion: "Based on available data"
+        summary: "Well-established scientific consensus",
+        methodology: "Scientific literature review",
+        evidence: [{
+          source: "World Health Organization Guidelines",
+          link: "https://www.who.int/health-topics/physical-activity",
+          description: "WHO recommendations on physical activity"
+        }],
+        limitations: ["Individual fitness levels may vary"],
+        conclusion: "Based on extensive research and global health guidelines",
+        expertOpinions: [],
+        references: [{
+          title: "WHO Guidelines on Physical Activity",
+          authors: "World Health Organization",
+          publication: "WHO",
+          year: "2020",
+          link: "https://www.who.int/publications/i/item/9789240015128"
+        }]
       },
       influencer: {
         id: 1,
@@ -131,8 +187,7 @@ function createDefaultInfluencer(name: string): Influencer {
         handle: name.toLowerCase().replace(/[^a-z0-9]/g, ''),
         platform: 'YouTube',
         trustScore: 85
-      },
-      sources: ["AI Analysis"]
+      }
     }
   ];
 
@@ -150,7 +205,6 @@ function createDefaultInfluencer(name: string): Influencer {
 function validateAndFixData(data: any, originalName: string): Influencer {
   const defaultData = createDefaultInfluencer(originalName);
 
-  // Ensure we have valid data
   const finalData = {
     ...defaultData,
     ...data,
@@ -164,10 +218,29 @@ function validateAndFixData(data: any, originalName: string): Influencer {
           confidence: Number(claim.confidence) || defaultData.claims[0].confidence,
           date: isValidDate(claim.date) ? claim.date : new Date().toISOString(),
           analysis: {
-            methodology: "AI-based analysis",
-            evidence: ["Automated content analysis", "Pattern recognition"],
-            limitations: ["Limited to public information", "AI interpretation"],
-            conclusion: "Based on available data"
+            summary: claim.analysis?.summary || "Analysis based on available evidence",
+            methodology: claim.analysis?.methodology || "Scientific literature review",
+            evidence: Array.isArray(claim.analysis?.evidence) 
+              ? claim.analysis.evidence.map((e: any) => ({
+                  source: e.source || "Scientific study",
+                  link: e.link || "",
+                  description: e.description || "Supporting evidence"
+                }))
+              : [{
+                  source: "Scientific literature",
+                  link: "",
+                  description: "General scientific consensus"
+                }],
+            limitations: Array.isArray(claim.analysis?.limitations)
+              ? claim.analysis.limitations
+              : ["Individual results may vary"],
+            conclusion: claim.analysis?.conclusion || "Based on current scientific understanding",
+            expertOpinions: Array.isArray(claim.analysis?.expertOpinions)
+              ? claim.analysis.expertOpinions
+              : [],
+            references: Array.isArray(claim.analysis?.references)
+              ? claim.analysis.references
+              : []
           },
           influencer: {
             id: index + 1,
@@ -175,38 +248,25 @@ function validateAndFixData(data: any, originalName: string): Influencer {
             handle: data.handle || originalName.toLowerCase().replace(/[^a-z0-9]/g, ''),
             platform: data.platform || 'YouTube',
             trustScore: Number(data.trustScore) || 85
-          },
-          sources: ["AI Analysis", "Public Content Review"]
+          }
         }))
-      : defaultData.claims.map((claim, index) => ({
-          ...claim,
-          id: index + 1,
-          analysis: {
-            methodology: "AI-based analysis",
-            evidence: ["Automated content analysis", "Pattern recognition"],
-            limitations: ["Limited to public information", "AI interpretation"],
-            conclusion: "Based on available data"
-          },
-          influencer: {
-            id: index + 1,
-            name: originalName,
-            handle: data.handle || originalName.toLowerCase().replace(/[^a-z0-9]/g, ''),
-            platform: data.platform || 'YouTube',
-            trustScore: Number(data.trustScore) || 85
-          },
-          sources: ["AI Analysis", "Public Content Review"]
-        }))
+      : defaultData.claims
   };
-
-  // Fix numbers
-  finalData.followers = Number(finalData.followers) || defaultData.followers;
-  finalData.trustScore = Number(finalData.trustScore) || defaultData.trustScore;
 
   return finalData;
 }
 
 function isValidCategory(category: string): boolean {
-  const validCategories = ['Nutrition', 'Medicine', 'Mental Health', 'Fitness'];
+  const validCategories = [
+    'Sleep', 
+    'Neuroscience', 
+    'Mental Health', 
+    'Fitness', 
+    'Nutrition', 
+    'Hormones',
+    'Performance',
+    'Behavior'
+  ];
   return validCategories.includes(category);
 }
 

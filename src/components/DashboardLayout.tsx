@@ -1,8 +1,9 @@
 'use client';
 
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTheme } from '@/providers/ThemeProvider';
 import { 
   HomeIcon, 
   ChartBarIcon, 
@@ -22,23 +23,8 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { darkMode, toggleDarkMode } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
-  const [darkMode, setDarkMode] = useState(false);
-
-  useEffect(() => {
-    // Verificar preferencia guardada
-    const isDark = localStorage.getItem('darkMode') === 'true';
-    setDarkMode(isDark);
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    }
-  }, []);
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    localStorage.setItem('darkMode', (!darkMode).toString());
-    document.documentElement.classList.toggle('dark');
-  };
 
   const menuItems = [
     { name: 'Overview', href: '/', icon: HomeIcon },

@@ -6,10 +6,11 @@ import { rankingService } from '@/services/rankingService';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Influencer } from '@/app/types/types';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import Link from 'next/link';
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
-  const initialQuery = searchParams.get('q') || '';
+  const initialQuery = searchParams?.get('q') ?? '';
   
   const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [loading, setLoading] = useState(false);
@@ -91,8 +92,12 @@ export default function SearchPage() {
                 <div>
                   <h3 className="text-lg font-semibold mb-3">Recent Claims</h3>
                   <div className="space-y-3">
-                    {result.claims.map((claim, index) => (
-                      <div key={index} className="bg-gray-50 p-4 rounded">
+                    {result.claims.slice(0, 3).map((claim, index) => (
+                      <Link 
+                        key={index} 
+                        href={`/claims/${claim.id}`}
+                        className="block bg-gray-50 p-4 rounded hover:bg-gray-100 transition-colors"
+                      >
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-gray-900">
                             {claim.category}
@@ -108,7 +113,21 @@ export default function SearchPage() {
                           </span>
                         </div>
                         <p className="text-gray-700">{claim.text}</p>
-                      </div>
+                        
+                        {/* Preview of analysis with null check */}
+                        {claim.analysis?.summary && (
+                          <div className="mt-2 text-sm text-gray-600">
+                            {claim.analysis.summary}
+                          </div>
+                        )}
+                        
+                        <div className="mt-2 text-sm text-blue-600 flex items-center">
+                          <span>View full analysis</span>
+                          <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </Link>
                     ))}
                   </div>
                 </div>

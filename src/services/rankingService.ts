@@ -392,60 +392,86 @@ export const rankingService = {
   },
 
   async getClaimById(claimId: number): Promise<Claim | null> {
-    const { data, error } = await supabase
-      .from('claims')
-      .select(`
-        id,
-        text,
-        status,
-        category,
-        date,
-        confidence,
-        methodology,
-        evidence,
-        limitations,
-        conclusion,
-        sources,
-        influencer_id,
-        influencer:influencer_id (
+    try {
+      // First, check if the claim exists
+      const { data: claim, error } = await supabase
+        .from('claims')
+        .select(`
+          id,
+          text,
+          category,
+          status,
+          confidence,
+          created_at,
+          analysis_summary,
+          methodology,
+          evidence,
+          limitations,
+          conclusion,
+          expert_opinions,
+          references,
+          influencer_id
+        `)
+        .eq('id', claimId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching claim:', error);
+        return null;
+      }
+
+      if (!claim) {
+        console.error('No claim found with id:', claimId);
+        return null;
+      }
+
+      // Then get the influencer data
+      const { data: influencer, error: influencerError } = await supabase
+        .from('influencers')
+        .select(`
           id,
           name,
           handle,
           platform,
           trust_score
-        )
-      `)
-      .eq('id', claimId)
-      .single();
+        `)
+        .eq('id', claim.influencer_id)
+        .single();
 
-    if (error) {
+      if (influencerError) {
+        console.error('Error fetching influencer:', influencerError);
+        return null;
+      }
+
+      // Transform the data to match our Claim type
+      return {
+        id: claim.id,
+        text: claim.text,
+        category: claim.category,
+        status: claim.status,
+        confidence: claim.confidence,
+        date: claim.created_at,
+        analysis: {
+          summary: claim.analysis_summary || 'Analysis pending',
+          methodology: claim.methodology || 'Standard scientific analysis methodology',
+          evidence: claim.evidence || [],
+          limitations: claim.limitations || [],
+          conclusion: claim.conclusion || 'Pending detailed analysis',
+          expertOpinions: claim.expert_opinions || [],
+          references: claim.references || []
+        },
+        influencer: {
+          id: influencer.id,
+          name: influencer.name,
+          handle: influencer.handle,
+          platform: influencer.platform,
+          trustScore: influencer.trust_score
+        }
+      };
+    } catch (error) {
       console.error('Error getting claim:', error);
       return null;
     }
-
-    const claim = data as unknown as SupabaseClaim;
-    return {
-      id: claim.id,
-      text: claim.text,
-      status: claim.status,
-      category: claim.category,
-      date: claim.date,
-      confidence: claim.confidence,
-      analysis: {
-        methodology: claim.methodology || 'Standard scientific analysis methodology',
-        evidence: claim.evidence || [],
-        limitations: claim.limitations || [],
-        conclusion: claim.conclusion || 'Pending detailed analysis'
-      },
-      influencer: {
-        id: claim.influencer.id,
-        name: claim.influencer.name,
-        handle: claim.influencer.handle,
-        platform: claim.influencer.platform,
-        trustScore: claim.influencer.trust_score
-      },
-      sources: claim.sources || []
-    };
   },
 
   async getTopInfluencerByCategory(category: string) {
@@ -473,6 +499,7 @@ export const rankingService = {
 
   async findOrCreateInfluencer(name: string) {
     try {
+      // Primero buscar si existe
       const { data: existingInfluencer, error: searchError } = await supabase
         .from('influencer_stats')
         .select('*')
@@ -488,6 +515,7 @@ export const rankingService = {
         return mapInfluencerData(existingInfluencer);
       }
 
+      // Si no existe, obtener datos de Google AI
       const { analyzeInfluencer } = await import('@/services/googleAI');
       const aiData = await analyzeInfluencer(name);
 
@@ -496,18 +524,16 @@ export const rankingService = {
         return null;
       }
 
-      // Primero crear el influencer
+      // 1. Primero crear el influencer en la tabla principal
       const { data: newInfluencer, error: createError } = await supabase
-        .from('influencer_stats')
+        .from('influencers')
         .insert([{
           name: aiData.name,
           handle: aiData.handle || name.toLowerCase().replace(/\s+/g, '_'),
           platform: aiData.platform || 'Unknown',
           followers: aiData.followers || 0,
           trust_score: aiData.trustScore || 70,
-          profile_image: aiData.profileImage || '',
-          total_views: 1,
-          last_viewed: new Date().toISOString()
+          profile_image: aiData.profileImage || ''
         }])
         .select()
         .single();
@@ -517,23 +543,66 @@ export const rankingService = {
         return null;
       }
 
-      // Luego insertar los claims
+      // 2. Crear entrada en influencer_stats
+      const { data: newStats, error: statsError } = await supabase
+        .from('influencer_stats')
+        .insert([{
+          name: newInfluencer.name,
+          handle: newInfluencer.handle,
+          platform: newInfluencer.platform,
+          followers: newInfluencer.followers,
+          trust_score: newInfluencer.trust_score,
+          profile_image: newInfluencer.profile_image,
+          total_views: 1,
+          last_viewed: new Date().toISOString(),
+          claims_count: aiData.claims?.length || 0,
+          claims_by_category: calculateClaimsByCategory(aiData.claims || []),
+          categories: extractCategories(aiData.claims || [])
+        }])
+        .select()
+        .single();
+
+      if (statsError) {
+        console.error('Error creating stats:', statsError);
+        return null;
+      }
+
+      // 3. Insertar los claims con su análisis completo
       if (aiData.claims?.length > 0) {
         for (const claim of aiData.claims) {
-          await this.insertClaim({
-            ...claim,
-            influencer: {
-              id: newInfluencer.id,
-              name: newInfluencer.name,
-              handle: newInfluencer.handle,
-              platform: newInfluencer.platform,
-              trustScore: newInfluencer.trust_score
-            }
-          });
+          const { data: newClaim, error: claimError } = await supabase
+            .from('claims')
+            .insert([{
+              text: claim.text,
+              category: claim.category,
+              status: claim.status,
+              confidence: claim.confidence,
+              created_at: claim.date,
+              analysis_summary: claim.analysis.summary,
+              methodology: claim.analysis.methodology,
+              evidence: claim.analysis.evidence,
+              limitations: claim.analysis.limitations,
+              conclusion: claim.analysis.conclusion,
+              expert_opinions: claim.analysis.expertOpinions,
+              references: claim.analysis.references,
+              influencer_id: newInfluencer.id
+            }])
+            .select()
+            .single();
+
+          if (claimError) {
+            console.error('Error inserting claim:', claimError);
+            // Continue with other claims even if one fails
+            continue;
+          }
         }
       }
 
-      return mapInfluencerData(newInfluencer);
+      return {
+        ...mapInfluencerData(newStats),
+        claims: aiData.claims || []
+      };
+
     } catch (error) {
       console.error('Error in findOrCreateInfluencer:', error);
       throw error;
@@ -549,11 +618,13 @@ export const rankingService = {
         category: claim.category,
         date: claim.date,
         confidence: claim.confidence,
+        analysis_summary: claim.analysis.summary,
         methodology: claim.analysis.methodology,
         evidence: claim.analysis.evidence,
         limitations: claim.analysis.limitations,
         conclusion: claim.analysis.conclusion,
-        sources: claim.sources,
+        expert_opinions: claim.analysis.expertOpinions,
+        references: claim.analysis.references,
         influencer_id: claim.influencer.id
       }])
       .select()
@@ -578,10 +649,13 @@ function mapClaimFromDB(data: any): Claim {
     date: data.date,
     confidence: data.confidence,
     analysis: {
+      summary: data.analysis_summary || 'Analysis pending',
       methodology: data.methodology || 'Standard scientific analysis methodology',
       evidence: data.evidence || [],
       limitations: data.limitations || [],
-      conclusion: data.conclusion || 'Pending detailed analysis'
+      conclusion: data.conclusion || 'Pending detailed analysis',
+      expertOpinions: data.expert_opinions || [],
+      references: data.references || []
     },
     influencer: {
       id: data.influencer_id,
@@ -589,7 +663,6 @@ function mapClaimFromDB(data: any): Claim {
       handle: data.influencer?.handle || '',
       platform: data.influencer?.platform || '',
       trustScore: data.influencer?.trust_score || 0
-    },
-    sources: data.sources || []
+    }
   };
 } 

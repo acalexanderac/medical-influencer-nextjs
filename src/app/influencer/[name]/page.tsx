@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Influencer } from '@/app/types/types';
 import { rankingService } from '@/services/rankingService';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import Link from 'next/link';
 
 export default function InfluencerPage() {
   const params = useParams();
@@ -14,6 +15,12 @@ export default function InfluencerPage() {
 
   useEffect(() => {
     async function loadInfluencer() {
+      if (!params?.name) {
+        setError('Invalid influencer name');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const name = decodeURIComponent(params.name as string);
@@ -59,7 +66,7 @@ export default function InfluencerPage() {
     }
 
     loadInfluencer();
-  }, [params.name]);
+  }, [params?.name]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -119,7 +126,11 @@ export default function InfluencerPage() {
           <h2 className="text-xl font-semibold mb-4">Health Claims</h2>
           <div className="space-y-4">
             {influencer.claims?.map((claim) => (
-              <div key={claim.id} className="border rounded p-4">
+              <Link 
+                key={claim.id} 
+                href={`/claims/${claim.id}`}
+                className="block border rounded p-4 hover:bg-gray-50 transition-colors"
+              >
                 <div className="flex justify-between items-start mb-2">
                   <p className="flex-1">{claim.text}</p>
                   <span className={`px-2 py-1 rounded text-sm ${
@@ -134,7 +145,18 @@ export default function InfluencerPage() {
                   <span>{claim.category}</span>
                   <span>Confidence: {claim.confidence}%</span>
                 </div>
-              </div>
+                {claim.analysis?.summary && (
+                  <div className="mt-2 text-sm text-gray-600">
+                    {claim.analysis.summary}
+                  </div>
+                )}
+                <div className="mt-2 text-sm text-blue-600 flex items-center">
+                  <span>View full analysis</span>
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </Link>
             ))}
           </div>
         </div>
